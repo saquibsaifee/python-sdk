@@ -1,7 +1,8 @@
 """Shared pydantic bases for the generated `mcp_types.v*` packages and the monolith."""
 
+from collections.abc import Container, Mapping
 from functools import cache
-from typing import Any, get_args
+from typing import Any, cast, get_args
 
 from pydantic import BaseModel, ConfigDict, SerializationInfo, SerializerFunctionWrapHandler, model_serializer
 
@@ -64,9 +65,23 @@ class KeepRequiredNullable(BaseModel):
         for name, alias in _nullable_required_fields(type(self)):
             if getattr(self, name, None) is not None:
                 continue
-            if (info.include is not None and name not in info.include) or (
-                info.exclude is not None and name in info.exclude
-            ):
+            if info.include is not None and name not in info.include:
+                continue
+            if _is_excluded(name, info.exclude):
                 continue
             data.setdefault(alias if by_alias else name, None)
         return data
+
+
+def _is_excluded(name: str, exclude: Any) -> bool:
+    """Whether `exclude` drops `name` outright, as opposed to selecting within it.
+
+    A mapping entry carrying anything other than `True`/`...` descends into the field, so
+    pydantic keeps the field itself and its null still has to go back.
+    """
+    if exclude is None:
+        return False
+    if isinstance(exclude, Mapping):
+        marker: Any = cast("Mapping[Any, Any]", exclude).get(name)
+        return marker is True or marker is Ellipsis
+    return name in cast("Container[Any]", exclude)

@@ -2191,7 +2191,12 @@ ServerResult = (
     | SubscriptionsListenResult
     | InputRequiredResult
 )
-"""Union of every result payload a server can return for a client request.
+"""Union of the core result payloads a server can return for a client request.
+
+The 2025-11-25 task results (`CreateTaskResult`, `GetTaskResult`,
+`GetTaskPayloadResult`, `ListTasksResult`, `CancelTaskResult`) are deliberately
+excluded, matching that revision's own `ServerResult`; a server serving those
+answers through them directly rather than through this union.
 
 `InputRequiredResult` is deliberately last: both of its fields are optional,
 so an earlier position would shadow other members during union resolution.

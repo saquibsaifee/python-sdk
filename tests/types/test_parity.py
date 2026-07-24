@@ -291,7 +291,13 @@ def test_keep_required_nullable_only_restores_what_exclude_none_removed() -> Non
 
     assert task.model_dump(by_alias=True, exclude_none=True)["ttl"] is None
     assert "ttl" not in task.model_dump(by_alias=True, exclude_none=True, exclude={"ttl"})
+    assert "ttl" not in task.model_dump(by_alias=True, exclude_none=True, exclude={"ttl": True})
     assert task.model_dump(by_alias=True, exclude_none=True, include={"task_id"}) == {"taskId": "t1"}
+    # A mapping entry that is not `True`/`...` selects within the field, so pydantic keeps the
+    # field itself and the null has to go back. `data` is `Any`, so descending into it is legal.
+    log = _types.LoggingMessageNotificationParams(level="info", data=None)
+    assert log.model_dump(exclude_none=True, exclude={"data": {"secret"}}) == {"level": "info", "data": None}
+    assert log.model_dump(exclude_none=True, exclude={"data": True}) == {"level": "info"}
     # Without exclude_none nothing was dropped, so the wrap passes the dump through untouched.
     assert task.model_dump(by_alias=True)["statusMessage"] is None
     # The restored key follows the caller's alias choice rather than always using the wire spelling.

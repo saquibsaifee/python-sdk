@@ -1657,7 +1657,7 @@ Behavior changes:
 
 The task runtime that shipped behind the `experimental` properties is gone. The `mcp.client.experimental`, `mcp.server.experimental`, `mcp.shared.experimental`, and `mcp.server.lowlevel.experimental` modules have been removed, along with the `experimental` properties on `ClientSession`, `ServerSession`, `Server`, and `ServerRequestContext`. There is no built-in task store, no polling helper, and no automatic `tasks/*` routing. The `TaskExecutionMode` alias is also gone; its literal is inlined on `ToolExecution.task_support`.
 
-The task types stay, so a server can still serve Tasks ([SEP-1686](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1686)) on a handshake-era connection by supplying the parts the runtime used to provide. This covers the server side of a task-augmented `tools/call`; the client side of a task-augmented `sampling/createMessage` or `elicitation/create` is not wired, so a client cannot answer one of those with a `CreateTaskResult`. A task-augmented `tools/call` arrives with `params.task` set and may be answered with a `CreateTaskResult`, and the `tasks/get`, `tasks/result`, `tasks/list`, and `tasks/cancel` methods are registered with `Server.add_request_handler`.
+The task types stay, so a server can still serve Tasks ([SEP-1686](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1686)) on a 2025-11-25 connection by supplying the parts the runtime used to provide. 2025-11-25 is the only revision that defines them: the earlier handshake revisions predate SEP-1686, so a `CreateTaskResult` there is rejected as an internal error even though `params.task` reaches the handler. This covers the server side of a task-augmented `tools/call`; the client side of a task-augmented `sampling/createMessage` or `elicitation/create` is not wired, so a client cannot answer one of those with a `CreateTaskResult`. A task-augmented `tools/call` arrives with `params.task` set and may be answered with a `CreateTaskResult`, and the `tasks/get`, `tasks/result`, `tasks/list`, and `tasks/cancel` methods are registered with `Server.add_request_handler`.
 
 ```python
 async def call_tool(
@@ -1680,23 +1680,20 @@ Two things to know about handlers registered this way. They serve every negotiat
 
 The same era check belongs in `on_call_tool`, and `params.task` is not a substitute for it. The handler receives the version-free params model, which carries `task` at every version, so a client can set the field on a 2026-07-28 connection and reach a handler that then answers with a `CreateTaskResult`, which that revision rejects as an opaque internal error. Gate on `ctx.protocol_version == "2025-11-25"` and treat `params.task` as the opt-in within that era, not as the era test.
 
-`Server.get_capabilities` does not derive a `tasks` capability from the registered handlers, and a spec-compliant client will not augment a request until it sees one, so build the advertisement explicitly:
+`Server.get_capabilities` does not derive a `tasks` capability from the registered handlers, and a spec-compliant client will not augment a request until it sees one, so add the advertisement by overriding `create_initialization_options`. Override rather than building an `InitializationOptions` and passing it in: `streamable_http_app()` and the SSE app call the method themselves and take no override, so only the subclass reaches every transport.
 
 ```python
-capabilities = server.get_capabilities()
-options = InitializationOptions(
-    server_name="example",
-    server_version="0.1.0",
-    capabilities=capabilities.model_copy(
-        update={
-            "tasks": ServerTasksCapability(
-                list=TasksListCapability(),
-                cancel=TasksCancelCapability(),
-                requests=ServerTasksRequestsCapability(tools=TasksToolsCapability(call={})),
-            )
-        }
-    ),
-)
+class TasksServer(Server[Any]):
+    def create_initialization_options(self, *args: Any, **kwargs: Any) -> InitializationOptions:
+        options = super().create_initialization_options(*args, **kwargs)
+        tasks = ServerTasksCapability(
+            list=TasksListCapability(),
+            cancel=TasksCancelCapability(),
+            requests=ServerTasksRequestsCapability(tools=TasksToolsCapability(call={})),
+        )
+        return options.model_copy(
+            update={"capabilities": options.capabilities.model_copy(update={"tasks": tasks})}
+        )
 ```
 
 A client sends the augmented request and names the result type through `ClientSession.send_request`, since `call_tool` resolves to the two core result arms:
