@@ -207,6 +207,7 @@ async def find_similar_memories(embedding: list[float], deps: Deps) -> list[Memo
 async def update_importance(user_embedding: list[float], deps: Deps):
     async with deps.pool.acquire() as conn:
         rows = await conn.fetch("SELECT id, importance, access_count, embedding FROM memories")
+        updates = []
         for row in rows:
             memory_embedding = row["embedding"]
             similarity = cosine_similarity(user_embedding, memory_embedding)
@@ -216,15 +217,16 @@ async def update_importance(user_embedding: list[float], deps: Deps):
             else:
                 new_importance = row["importance"] * DECAY_FACTOR
                 new_access_count = row["access_count"]
-            await conn.execute(
+            updates.append((new_importance, new_access_count, row["id"]))
+
+        if updates:
+            await conn.executemany(
                 """
                 UPDATE memories
                 SET importance = $1, access_count = $2
                 WHERE id = $3
                 """,
-                new_importance,
-                new_access_count,
-                row["id"],
+                updates,
             )
 
 
