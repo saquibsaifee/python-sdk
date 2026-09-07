@@ -102,7 +102,7 @@ def test_get_npx_windows(monkeypatch: pytest.MonkeyPatch):
         if cmd[0] in candidates:
             return subprocess.CompletedProcess(cmd, 0)
         else:  # pragma: no cover
-            raise subprocess.CalledProcessError(1, cmd[0])
+            raise FileNotFoundError(2, "No such file or directory")
 
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -114,7 +114,7 @@ def test_get_npx_returns_none_when_npx_missing(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "platform", "win32", raising=False)
 
     def always_fail(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        raise subprocess.CalledProcessError(1, args[0])
+        raise FileNotFoundError(2, "No such file or directory")
 
     monkeypatch.setattr(subprocess, "run", always_fail)
     assert _get_npx_command() is None
