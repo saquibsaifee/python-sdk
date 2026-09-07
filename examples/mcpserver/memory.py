@@ -230,17 +230,18 @@ async def update_importance(user_embedding: list[float], deps: Deps):
 
 async def prune_memories(deps: Deps):
     async with deps.pool.acquire() as conn:
-        rows = await conn.fetch(
+        await conn.execute(
             """
-            SELECT id, importance, access_count
-            FROM memories
-            ORDER BY importance DESC
-            OFFSET $1
+            DELETE FROM memories
+            WHERE id IN (
+                SELECT id
+                FROM memories
+                ORDER BY importance DESC
+                OFFSET $1
+            )
             """,
             MAX_DEPTH,
         )
-        for row in rows:
-            await conn.execute("DELETE FROM memories WHERE id = $1", row["id"])
 
 
 async def display_memory_tree(deps: Deps) -> str:
